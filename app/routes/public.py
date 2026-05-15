@@ -1,16 +1,12 @@
-import logging
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from slowapi.util import get_remote_address
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.rate_limit import limiter
-from app.core.security import hash_ip
 from app.database import get_db
 from app.models.customer import Customer
-from app.models.scan_event import ScanEvent
 from app.models.vendor import Vendor
 from app.schemas.customer import (
     BUDGET_OPTIONS,
@@ -20,40 +16,16 @@ from app.schemas.customer import (
 )
 
 router = APIRouter(prefix="/public", tags=["public"])
-log = logging.getLogger(__name__)
-
-
-async def _log_scan(
-    db: AsyncSession,
-    *,
-    vendor_id: uuid.UUID,
-    request: Request,
-) -> None:
-    """Best-effort scan logging. Never fails the parent request."""
-    try:
-        ip = get_remote_address(request) or "0.0.0.0"
-        ua = request.headers.get("user-agent")
-        if ua and len(ua) > 512:
-            ua = ua[:512]
-
-        event = ScanEvent(
-            vendor_id=vendor_id,
-            ip_hash=hash_ip(ip),
-            user_agent=ua,
-        )
-        db.add(event)
-        await db.commit()
-    except Exception:  # pragma: no cover - analytics must not break UX
-        await db.rollback()
-        log.warning("scan_event_log_failed", exc_info=True)
 
 
 @router.get("/vendors/{vendor_id}", response_model=PublicVendorInfo)
 async def get_public_vendor(
     vendor_id: uuid.UUID,
-    request: Request,
     db: AsyncSession = Depends(get_db),
 ) -> PublicVendorInfo:
+    # Scan-event logging lives on the /register redirect (app.routes.redirects),
+    # which is what the QR actually points at. This endpoint just hydrates the
+    # form once the user has already landed on the frontend.
     stmt = select(Vendor).where(
         Vendor.id == vendor_id, Vendor.is_deleted.is_(False)
     )
@@ -62,8 +34,6 @@ async def get_public_vendor(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="vendor_not_found"
         )
-
-    await _log_scan(db, vendor_id=vendor.id, request=request)
 
     return PublicVendorInfo(
         id=vendor.id, name=vendor.name, city=vendor.city, state=vendor.state

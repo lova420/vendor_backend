@@ -17,6 +17,7 @@ from app.routes import (
     admin_vendors,
     auth as auth_routes,
     public as public_routes,
+    redirects as redirect_routes,
     vendor_cars,
     vendor_customers,
     vendor_dashboard,
@@ -77,6 +78,7 @@ app.include_router(vendor_customers.router)
 app.include_router(vendor_cars.router)
 app.include_router(vendor_dashboard.router)
 app.include_router(public_routes.router)
+app.include_router(redirect_routes.router)
 
 
 @app.exception_handler(ValueError)

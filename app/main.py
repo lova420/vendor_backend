@@ -21,6 +21,7 @@ from app.routes import (
     vendor_cars,
     vendor_customers,
     vendor_dashboard,
+    vendor_qr,
 )
 
 
@@ -77,6 +78,7 @@ app.include_router(admin_qr.router)
 app.include_router(vendor_customers.router)
 app.include_router(vendor_cars.router)
 app.include_router(vendor_dashboard.router)
+app.include_router(vendor_qr.router)
 app.include_router(public_routes.router)
 app.include_router(redirect_routes.router)
 

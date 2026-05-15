@@ -1,0 +1,72 @@
+# Render Blueprint for the MagickVoice FastAPI backend.
+# Lives at the backend repo root; the frontend is a separate repo / deploy.
+
+services:
+  - type: web
+    name: magickvoice-api
+    runtime: python
+    plan: free          # bump to "starter" if you want to avoid the ~30s cold start
+    region: singapore   # change to the region closest to your DB / users
+    buildCommand: pip install -r requirements.txt
+    # alembic upgrade runs once per deploy, before the new instance takes traffic.
+    preDeployCommand: alembic upgrade head
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      # --- Database (set values in Render dashboard; sync:false keeps them out of git) ---
+      - key: DB_HOST
+        sync: false
+      - key: DB_PORT
+        sync: false
+      - key: DB_NAME
+        sync: false
+      - key: DB_USER
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      # The CA pem is uploaded as a Secret File in the Render dashboard.
+      # Render mounts secret files under /etc/secrets/<filename>.
+      - key: DB_CA_CERT_PATH
+        value: /etc/secrets/db-ca.pem
+      - key: DB_SSL_MODE
+        value: verify-ca
+
+      # --- Auth ---
+      # generateValue: true makes Render mint a strong random secret on first deploy.
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_ALGORITHM
+        value: HS256
+      - key: JWT_EXPIRY_MINUTES
+        value: "1440"
+      # IP_HASH_PEPPER must stay stable after the first deploy — rotating it
+      # invalidates unique-visitor counts in scan_events.
+      - key: IP_HASH_PEPPER
+        generateValue: true
+
+      # --- Cookies ---
+      # SameSite=none is required when frontend + backend live on different
+      # domains. The browser also requires Secure=true alongside SameSite=none.
+      - key: AUTH_COOKIE_NAME
+        value: mv_session
+      - key: AUTH_COOKIE_SECURE
+        value: "true"
+      - key: AUTH_COOKIE_SAMESITE
+        value: none
+
+      # --- App ---
+      # FRONTEND_ORIGIN is used both for the Set-Cookie domain context and as
+      # the single allow-origin in CORS. Must be the EXACT origin including
+      # scheme — e.g. https://magickvoice.vercel.app, no trailing slash.
+      - key: FRONTEND_ORIGIN
+        sync: false
+      - key: HOSTING_ADDRESS
+        sync: false
+      - key: ENVIRONMENT
+        value: production
+
+      # --- Seed super-admin (used on first DB bootstrap only) ---
+      - key: DEFAULT_SUPERADMIN_EMAIL
+        sync: false
+      - key: DEFAULT_SUPERADMIN_PASSWORD
+        sync: false
